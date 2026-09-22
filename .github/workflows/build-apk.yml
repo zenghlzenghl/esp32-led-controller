@@ -57,64 +57,64 @@ jobs:
           echo "✅ Android SDK setup complete"
           sdkmanager --list_installed | head -10
 
-      - name: Verify setup
-        run: |
-          echo "=== Verifying Setup ==="
-          echo "Java version:"
-          java -version
-          echo ""
-          echo "SDK location:"
-          echo $ANDROID_HOME
-          echo ""
-          echo "Key files:"
-          ls -la gradlew app/build.gradle build.gradle settings.gradle 2>/dev/null || echo "Checking files..."
-
-      - name: Setup Gradle Wrapper
+      - name: Setup Gradle Wrapper with correct version
         run: |
           echo "=== Setting up Gradle Wrapper ==="
           
-          # Check if gradle-wrapper.jar exists
-          if [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-            echo "✅ gradle-wrapper.jar exists"
-            ls -lh gradle/wrapper/gradle-wrapper.jar
-          else
-            echo "❌ gradle-wrapper.jar missing, generating..."
-            
-            # Download gradle wrapper jar if possible
-            GRADLE_VERSION=$(grep 'distributionUrl' gradle/wrapper/gradle-wrapper.properties | sed 's/.*gradle-\([0-9.]*\).*/\1/')
-            echo "Required Gradle version: ${GRADLE_VERSION:-8.2}"
-            
-            # Try to use system gradle or download wrapper jar directly
-            if command -v gradle &> /dev/null; then
-              echo "Using system gradle to generate wrapper..."
-              gradle wrapper --gradle-version ${GRADLE_VERSION:-8.2}
+          # Read required Gradle version from properties file
+          GRADLE_VERSION=$(grep 'distributionUrl' gradle/wrapper/gradle-wrapper.properties | sed 's/.*gradle-\([0-9.]*\).*/\1/')
+          echo "Required Gradle version: ${GRADLE_VERSION:-8.2}"
+          
+          # Check if we have a valid gradle-wrapper.jar
+          if [ -f "gradle/wrapper/gradle-wrapper.jar" ] && [ -s "gradle/wrapper/gradle-wrapper.jar" ]; then
+            JAR_SIZE=$(stat -c%s "gradle/wrapper/gradle-wrapper.jar")
+            if [ "$JAR_SIZE" -gt 50000 ]; then
+              echo "✅ Valid gradle-wrapper.jar found (${JAR_SIZE} bytes)"
             else
-              echo "Downloading gradle-wrapper.jar..."
-              mkdir -p gradle/wrapper
-              
-              # Download from GitHub releases (official source)
-              wget -q "https://raw.githubusercontent.com/gradle/gradle/v${GRADLE_VERSION:-8.2}.0/gradle/wrapper/gradle-wrapper.jar" \
-                -O gradle/wrapper/gradle-wrapper.jar 2>/dev/null || \
-              wget -q "https://github.com/gradle/gradle/raw/v${GRADLE_VERSION:-8.2}.0/gradle/wrapper/gradle-wrapper.jar" \
-                -O gradle/wrapper/gradle-wrapper.jar 2>/dev/null || {
-                echo "⚠️ Could not download gradle-wrapper.jar, trying alternative..."
-                # Alternative: create minimal wrapper using gradle
-                curl -sL https://services.gradle.org/distributions/gradle-${GRADLE_VERSION:-8.2}-bin.zip -o /tmp/gradle.zip
-                unzip -q /tmp/gradle.zip -d /tmp/gradle_dist
-                /tmp/gradle_dist/gradle-${GRADLE_VERSION:-8.2}/bin/gradle wrapper --gradle-version ${GRADLE_VERSION:-8.2}
-              }
+              echo "⚠️ gradle-wrapper.jar too small (${JAR_SIZE} bytes), regenerating..."
+              rm -f gradle/wrapper/gradle-wrapper.jar
             fi
           fi
           
-          # Verify
+          # If no valid jar, download correct Gradle version and generate wrapper
+          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "Downloading Gradle ${GRADLE_VERSION:-8.2} to generate wrapper..."
+            
+            # Download the specific Gradle version we need (NOT using system gradle!)
+            curl -sL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION:-8.2}-bin.zip" -o /tmp/gradle-${GRADLE_VERSION:-8.2}.zip
+            
+            if [ -f "/tmp/gradle-${GRADLE_VERSION:-8.2}.zip" ] && [ -s "/tmp/gradle-${GRADLE_VERSION:-8.2}.zip" ]; then
+              echo "Extracting Gradle ${GRADLE_VERSION:-8.2}..."
+              rm -rf /tmp/gradle_dist
+              mkdir -p /tmp/gradle_dist
+              unzip -q -o /tmp/gradle-${GRADLE_VERSION:-8.2}.zip -d /tmp/gradle_dist
+              
+              echo "Generating wrapper with Gradle ${GRADLE_VERSION:-8.2}..."
+              /tmp/gradle_dist/gradle-${GRADLE_VERSION:-8.2}/bin/gradle wrapper --gradle-version ${GRADLE_VERSION:-8.2}
+              
+              echo "✅ Wrapper generated successfully"
+            else
+              echo "❌ Failed to download Gradle ${GRADLE_VERSION:-8.2}"
+              exit 1
+            fi
+          fi
+          
+          # Final verification
           echo ""
           echo "=== Verification ==="
-          if [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+          if [ -f "gradle/wrapper/gradle-wrapper.jar" ] && [ -s "gradle/wrapper/gradle-wrapper.jar" ]; then
             echo "✅ gradle-wrapper.jar ready:"
             ls -lh gradle/wrapper/gradle-wrapper.jar
             file gradle/wrapper/gradle-wrapper.jar
+            echo "JAR size: $(stat -c%s gradle/wrapper/gradle-wrapper.jar) bytes"
+            
+            # Show wrapper properties
+            echo ""
+            echo "Gradle wrapper configuration:"
+            cat gradle/wrapper/gradle-wrapper.properties
           else
-            echo "❌ Still missing gradle-wrapper.jar!"
+            echo "❌ Failed to setup gradle-wrapper.jar!"
+            ls -la gradle/wrapper/
             exit 1
           fi
 
