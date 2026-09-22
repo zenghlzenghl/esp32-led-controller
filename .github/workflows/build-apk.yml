@@ -69,8 +69,16 @@ jobs:
           echo "Key files:"
           ls -la gradlew app/build.gradle build.gradle settings.gradle 2>/dev/null || echo "Checking files..."
 
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
+      - name: Make gradlew executable and fix line endings
+        run: |
+          echo "=== Fixing line endings for gradlew ==="
+          # Convert Windows line endings (CRLF) to Unix (LF)
+          sed -i 's/\r$//' gradlew
+          # Make executable
+          chmod +x ./gradlew
+          # Verify
+          file gradlew
+          head -1 gradlew | cat -A
 
       - name: Build Debug APK
         id: build
