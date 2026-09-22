@@ -7,7 +7,7 @@ on:
       - 'app/**'
       - 'build.gradle'
       - 'gradle/**'
-      - '*.gradle'
+      '*.gradle'
   workflow_dispatch:
 
 jobs:
@@ -27,11 +27,20 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
 
+    - name: Generate Gradle Wrapper (if missing)
+      run: |
+        if [ ! -f "gradlew" ] || [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+          echo "📦 Generating Gradle Wrapper..."
+          gradle wrapper --gradle-version 8.2
+        else
+          echo "✅ Gradle Wrapper already exists"
+        fi
+
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
     - name: Build Debug APK with Gradle
-      run: ./gradlew assembleDebug
+      run: ./gradlew assembleDebug --no-daemon
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
@@ -40,23 +49,6 @@ jobs:
         path: app/build/outputs/apk/debug/app-debug.apk
         retention-days: 30
 
-    - name: Build Release APK with Gradle
-      run: ./gradlew assembleRelease
-      env:
-        SIGNING_KEY_BASE64: ${{ secrets.SIGNING_KEY_BASE64 }}
-        SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
-        SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
-        SIGNING_STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-      if: env.SIGNING_KEY_BASE64 != ''
-
-    - name: Upload Release APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ESP32-LED-Controller-Release
-        path: app/build/outputs/apk/release/app-release.apk
-        retention-days: 30
-      if: env.SIGNING_KEY_BASE64 != ''
-
     - name: Display build info
       run: |
         echo "🎉 Build completed successfully!"
@@ -64,7 +56,3 @@ jobs:
         echo "📱 APK Location:"
         echo "  Debug: app/build/outputs/apk/debug/app-debug.apk"
         ls -lh app/build/outputs/apk/debug/
-        if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
-          echo "  Release: app/build/outputs/apk/release/app-release.apk"
-          ls -lh app/build/outputs/apk/release/
-        fi
