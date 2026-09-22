@@ -69,6 +69,55 @@ jobs:
           echo "Key files:"
           ls -la gradlew app/build.gradle build.gradle settings.gradle 2>/dev/null || echo "Checking files..."
 
+      - name: Setup Gradle Wrapper
+        run: |
+          echo "=== Setting up Gradle Wrapper ==="
+          
+          # Check if gradle-wrapper.jar exists
+          if [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "✅ gradle-wrapper.jar exists"
+            ls -lh gradle/wrapper/gradle-wrapper.jar
+          else
+            echo "❌ gradle-wrapper.jar missing, generating..."
+            
+            # Download gradle wrapper jar if possible
+            GRADLE_VERSION=$(grep 'distributionUrl' gradle/wrapper/gradle-wrapper.properties | sed 's/.*gradle-\([0-9.]*\).*/\1/')
+            echo "Required Gradle version: ${GRADLE_VERSION:-8.2}"
+            
+            # Try to use system gradle or download wrapper jar directly
+            if command -v gradle &> /dev/null; then
+              echo "Using system gradle to generate wrapper..."
+              gradle wrapper --gradle-version ${GRADLE_VERSION:-8.2}
+            else
+              echo "Downloading gradle-wrapper.jar..."
+              mkdir -p gradle/wrapper
+              
+              # Download from GitHub releases (official source)
+              wget -q "https://raw.githubusercontent.com/gradle/gradle/v${GRADLE_VERSION:-8.2}.0/gradle/wrapper/gradle-wrapper.jar" \
+                -O gradle/wrapper/gradle-wrapper.jar 2>/dev/null || \
+              wget -q "https://github.com/gradle/gradle/raw/v${GRADLE_VERSION:-8.2}.0/gradle/wrapper/gradle-wrapper.jar" \
+                -O gradle/wrapper/gradle-wrapper.jar 2>/dev/null || {
+                echo "⚠️ Could not download gradle-wrapper.jar, trying alternative..."
+                # Alternative: create minimal wrapper using gradle
+                curl -sL https://services.gradle.org/distributions/gradle-${GRADLE_VERSION:-8.2}-bin.zip -o /tmp/gradle.zip
+                unzip -q /tmp/gradle.zip -d /tmp/gradle_dist
+                /tmp/gradle_dist/gradle-${GRADLE_VERSION:-8.2}/bin/gradle wrapper --gradle-version ${GRADLE_VERSION:-8.2}
+              }
+            fi
+          fi
+          
+          # Verify
+          echo ""
+          echo "=== Verification ==="
+          if [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "✅ gradle-wrapper.jar ready:"
+            ls -lh gradle/wrapper/gradle-wrapper.jar
+            file gradle/wrapper/gradle-wrapper.jar
+          else
+            echo "❌ Still missing gradle-wrapper.jar!"
+            exit 1
+          fi
+
       - name: Make gradlew executable and fix line endings
         run: |
           echo "=== Fixing line endings for gradlew ==="
