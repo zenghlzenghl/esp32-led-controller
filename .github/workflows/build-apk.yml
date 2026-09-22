@@ -63,7 +63,10 @@ jobs:
 
       - name: Accept Android SDK licenses
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          echo "Accepting all Android SDK licenses..."
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses > /tmp/sdk-license.log 2>&1 || true
+          echo "License acceptance completed"
+          tail -20 /tmp/sdk-license.log || true
 
       - name: Check for gradlew and create if missing
         run: |
