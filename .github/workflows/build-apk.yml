@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout code
@@ -19,38 +19,38 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Generate gradlew and wrapper
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build with Gradle
         run: |
-          echo "Checking for gradlew..."
-          if [ ! -f "gradlew" ]; then
-            echo "Generating gradlew..."
+          ls -la
+          echo "---"
+          if [ -f "./gradlew" ]; then
+            echo "✅ gradlew found"
+            ./gradlew --version
+            ./gradlew assembleDebug --no-daemon --stacktrace --info
+          else
+            echo "❌ gradlew not found, generating..."
             gradle wrapper --gradle-version 8.2
+            chmod +x gradlew
+            ./gradlew assembleDebug --no-daemon --stacktrace --info
           fi
-          chmod +x gradlew
-          ls -la gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Check build output
+        run: |
+          echo "=== Checking build output ==="
+          find . -name "*.apk" -type f 2>/dev/null || echo "No APK files found"
+          ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "Debug folder not found"
 
-      - name: Upload Debug APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ESP32-LED-Controller-Debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: ESP32-LED-Controller
+          path: |
+            app/build/outputs/apk/debug/*.apk
           retention-days: 30
-
-      - name: Show build results
         if: always()
-        run: |
-          echo "=========================================="
-          echo "BUILD SUMMARY"
-          echo "=========================================="
-          if [ -d "app/build/outputs/apk/debug" ]; then
-            echo "✅ Debug APK built successfully!"
-            ls -lh app/build/outputs/apk/debug/
-          else
-            echo "❌ Debug APK not found"
-          fi
