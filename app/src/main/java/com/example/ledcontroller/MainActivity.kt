@@ -25,7 +25,7 @@ class MainActivity : AppCompatActivity() {
     private var isPolling = false
 
     companion object {
-        const val MODE_NAMES = arrayOf("Static", "Breathing", "Blinking", "Rainbow", "Police")
+        val MODE_NAMES = arrayOf("Static", "Breathing", "Blinking", "Rainbow", "Police")
         const val DEFAULT_IP = "10.127.64.170"
     }
 
