@@ -49,8 +49,9 @@ jobs:
           echo "Installing platform-tools..."
           sdkmanager "platform-tools" > /dev/null 2>&1 || true
           
-          # Save paths for next steps
+          # Save paths for next steps (ensure both ANDROID_HOME and ANDROID_SDK_ROOT point to same location)
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
           
