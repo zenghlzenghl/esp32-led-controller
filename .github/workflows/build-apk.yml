@@ -13,89 +13,49 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Check repository structure
-        run: |
-          echo "=== Repository Root ==="
-          pwd
-          ls -la
-          echo ""
-          echo "=== Checking key files ==="
-          for file in build.gradle settings.gradle gradlew gradlew.bat; do
-            if [ -f "$file" ]; then
-              echo "✅ $file exists ($(ls -lh $file | awk '{print $5}'))"
-            else
-              echo "❌ $file MISSING"
-            fi
-          done
-          echo ""
-          echo "=== App directory ==="
-          if [ -d "app" ]; then
-            echo "✅ app/ directory exists"
-            ls -la app/
-            echo ""
-            echo "=== app/build.gradle ==="
-            if [ -f "app/build.gradle" ]; then
-              echo "✅ app/build.gradle exists"
-              head -20 app/build.gradle
-            else
-              echo "❌ app/build.gradle MISSING"
-            fi
-            echo ""
-            echo "=== app/src/main ==="
-            if [ -d "app/src/main" ]; then
-              echo "✅ app/src/main exists"
-              find app/src/main -type f | head -20
-            else
-              echo "❌ app/src/main MISSING"
-            fi
-          else
-            echo "❌ app/ directory MISSING!"
-          fi
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK command line tools
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept Android SDK licenses
+      - name: Accept licenses and install required SDK components
         run: |
-          echo "Accepting all Android SDK licenses..."
-          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses > /tmp/sdk-license.log 2>&1 || true
-          echo "License acceptance completed"
-          tail -20 /tmp/sdk-license.log || true
+          echo "=== Installing required Android SDK components ==="
+          
+          # Set up environment
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+          
+          # Accept all licenses
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          
+          # Install required components (platform, build-tools)
+          echo "Installing Android SDK platform 34..."
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" || true
+          
+          echo "Installing build-tools 34.0.0..."
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0" || true
+          
+          echo "=== SDK Setup Complete ==="
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list_installed | head -20
 
-      - name: Check for gradlew and create if missing
+      - name: Check repository structure
         run: |
-          echo "=== Gradle Wrapper Status ==="
-          if [ -f "./gradlew" ]; then
-            echo "✅ gradlew file exists"
-            file ./gradlew
-            ls -lh ./gradlew
-          else
-            echo "❌ gradlew NOT found - will try to generate"
-          fi
-          
-          if [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-            echo "✅ gradle-wrapper.jar exists"
-            ls -lh gradle/wrapper/gradle-wrapper.jar
-          else
-            echo "❌ gradle-wrapper.jar NOT found"
-          fi
-          
-          if [ -f "gradle/wrapper/gradle-wrapper.properties" ]; then
-            echo "✅ gradle-wrapper.properties exists"
-            cat gradle/wrapper/gradle-wrapper.properties
-          else
-            echo "❌ gradle-wrapper.properties NOT found"
-          fi
+          echo "=== Repository Structure Check ==="
+          pwd
+          ls -la
+          echo ""
+          echo "Key files:"
+          for f in build.gradle settings.gradle gradlew app/build.gradle; do
+            if [ -f "$f" ]; then echo "✅ $f"; else echo "❌ $f MISSING"; fi
+          done
 
       - name: Make gradlew executable
-        run: |
-          chmod +x ./gradlew 2>/dev/null || echo "No gradlew to chmod"
+        run: chmod +x ./gradlew
 
       - name: Build Debug APK
         id: build
@@ -103,63 +63,34 @@ jobs:
         run: |
           echo "=== Starting Gradle Build ==="
           export ANDROID_HOME=/usr/local/lib/android/sdk
-          export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/tools
+          export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/tools:$ANDROID_HOME/cmdline-tools/latest/bin
           
-          if [ -f "./gradlew" ]; then
-            echo "Using existing gradlew..."
-            ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1 | tee build.log
-            BUILD_EXIT_CODE=${PIPESTATUS[0]}
-          else
-            echo "No gradlew, trying to use system gradle..."
-            which gradle
-            gradle --version
-            gradle wrapper --gradle-version 8.2
-            chmod +x gradlew
-            ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1 | tee build.log
-            BUILD_EXIT_CODE=${PIPESTATUS[0]}
-          fi
-          
-          echo ""
-          echo "=== Build Exit Code: $BUILD_EXIT_CODE ==="
-          exit $BUILD_EXIT_CODE
-
-      - name: Show build log (if failed)
-        if: steps.build.outcome == 'failure'
-        run: |
-          echo "=== BUILD FAILED - Showing last 100 lines of log ==="
-          if [ -f "build.log" ]; then
-            tail -100 build.log
-          fi
-          
-          echo ""
-          echo "=== Checking for common issues ==="
           echo "Gradle version:"
-          ./gradlew --version 2>/dev/null || echo "Cannot run gradlew"
+          ./gradlew --version
           
           echo ""
-          echo "Java version:"
-          java -version
+          echo "Building APK..."
+          ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1 | tee build.log
           
+          BUILD_RESULT=${PIPESTATUS[0]}
           echo ""
-          echo "Android SDK location:"
-          echo $ANDROID_HOME
-          ls $ANDROID_HOME 2>/dev/null || echo "ANDROID_HOME not set or not accessible"
+          echo "=== Build Exit Code: $BUILD_RESULT ==="
+          exit $BUILD_RESULT
 
-      - name: Find all APK files
+      - name: Show build results
         if: always()
         run: |
-          echo "=== Searching for APK files ==="
-          find . -name "*.apk" -type f 2>/dev/null
-          echo ""
-          echo "=== Checking build output directory ==="
+          echo "=== Build Results ==="
           if [ -d "app/build/outputs/apk/debug" ]; then
-            echo "✅ Debug output directory exists"
+            echo "✅ APK files found:"
             ls -lah app/build/outputs/apk/debug/
           else
-            echo "❌ Debug output directory not found"
-            echo "Looking for any build directories..."
-            find . -type d -name "build" 2>/dev/null | head -10
+            echo "❌ No APK in debug directory"
           fi
+          
+          echo ""
+          echo "All APK files in project:"
+          find . -name "*.apk" -type f 2>/dev/null || echo "No APK files found"
 
       - name: Upload build log
         uses: actions/upload-artifact@v4
@@ -170,7 +101,7 @@ jobs:
         if: always()
         continue-on-error: true
 
-      - name: Upload APK if exists
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ESP32-LED-Controller-APK
