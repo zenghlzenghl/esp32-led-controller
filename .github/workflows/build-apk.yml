@@ -19,40 +19,55 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Accept licenses and install required SDK components
+      - name: Download Android command line tools
         run: |
-          echo "=== Installing required Android SDK components ==="
+          echo "=== Downloading Android SDK Command-line Tools ==="
+          cd /tmp
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdtools.zip
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          unzip -q cmdtools.zip -d $HOME/android-sdk/cmdline-tools
+          mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
+          echo "✅ Android SDK Command-line Tools downloaded"
+
+      - name: Setup Android SDK environment
+        run: |
+          echo "=== Setting up Android SDK ==="
           
-          # Set up environment
-          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_HOME=$HOME/android-sdk
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
           
           # Accept all licenses
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
           
-          # Install required components (platform, build-tools)
-          echo "Installing Android SDK platform 34..."
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" || true
+          # Install required components
+          echo "Installing platform android-34..."
+          sdkmanager "platforms;android-34" > /dev/null 2>&1 || true
           
           echo "Installing build-tools 34.0.0..."
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0" || true
+          sdkmanager "build-tools;34.0.0" > /dev/null 2>&1 || true
           
-          echo "=== SDK Setup Complete ==="
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list_installed | head -20
+          echo "Installing platform-tools..."
+          sdkmanager "platform-tools" > /dev/null 2>&1 || true
+          
+          # Save paths for next steps
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+          
+          echo "✅ Android SDK setup complete"
+          sdkmanager --list_installed | head -10
 
-      - name: Check repository structure
+      - name: Verify setup
         run: |
-          echo "=== Repository Structure Check ==="
-          pwd
-          ls -la
+          echo "=== Verifying Setup ==="
+          echo "Java version:"
+          java -version
+          echo ""
+          echo "SDK location:"
+          echo $ANDROID_HOME
           echo ""
           echo "Key files:"
-          for f in build.gradle settings.gradle gradlew app/build.gradle; do
-            if [ -f "$f" ]; then echo "✅ $f"; else echo "❌ $f MISSING"; fi
-          done
+          ls -la gradlew app/build.gradle build.gradle settings.gradle 2>/dev/null || echo "Checking files..."
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew
@@ -61,36 +76,26 @@ jobs:
         id: build
         continue-on-error: true
         run: |
-          echo "=== Starting Gradle Build ==="
-          export ANDROID_HOME=/usr/local/lib/android/sdk
-          export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/tools:$ANDROID_HOME/cmdline-tools/latest/bin
-          
-          echo "Gradle version:"
-          ./gradlew --version
-          
+          echo "=== Building APK ==="
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
+          BUILD_EXIT=${PIPESTATUS[0]}
           echo ""
-          echo "Building APK..."
-          ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1 | tee build.log
-          
-          BUILD_RESULT=${PIPESTATUS[0]}
-          echo ""
-          echo "=== Build Exit Code: $BUILD_RESULT ==="
-          exit $BUILD_RESULT
+          echo "Build exit code: $BUILD_EXIT"
+          exit $BUILD_EXIT
 
-      - name: Show build results
+      - name: Check for APK
         if: always()
         run: |
-          echo "=== Build Results ==="
+          echo "=== Checking Build Output ==="
           if [ -d "app/build/outputs/apk/debug" ]; then
-            echo "✅ APK files found:"
+            echo "✅ SUCCESS! APK files:"
             ls -lah app/build/outputs/apk/debug/
           else
-            echo "❌ No APK in debug directory"
+            echo "❌ No debug APK found"
+            echo ""
+            echo "Looking for any APK files..."
+            find . -name "*.apk" 2>/dev/null || echo "No APKs found"
           fi
-          
-          echo ""
-          echo "All APK files in project:"
-          find . -name "*.apk" -type f 2>/dev/null || echo "No APK files found"
 
       - name: Upload build log
         uses: actions/upload-artifact@v4
@@ -104,7 +109,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ESP32-LED-Controller-APK
+          name: ESP32-LED-Controller
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 30
         continue-on-error: true
