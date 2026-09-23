@@ -24,6 +24,7 @@ class MainActivity : AppCompatActivity() {
     private var currentState: LedState = LedState()
     private var isPolling = false
     private var isInitializing = true  // 标记是否正在初始化
+    private var lastUserActionTime: Long = 0  // 记录用户最后操作时间
 
     companion object {
         val MODE_NAMES = arrayOf("Static", "Breathing", "Blinking", "Rainbow", "Police")
@@ -42,11 +43,50 @@ class MainActivity : AppCompatActivity() {
     private fun setupUi() {
         binding.editTextIp.setText(DEFAULT_IP)
         
+        LedApiClient.setBaseUrl(DEFAULT_IP)  // ✅ 启动时立即设置IP为输入框中的值
+        android.util.Log.d("MainActivity", "App started with IP: $DEFAULT_IP")
+        
+        binding.editTextIp.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val ip = s?.toString()?.trim()
+                if (!ip.isNullOrEmpty()) {
+                    LedApiClient.setBaseUrl(ip)  // ✅ 用户修改IP时立即更新
+                    android.util.Log.d("MainActivity", "IP changed to: $ip")
+                }
+            }
+        })
+        
         binding.buttonConnect.setOnClickListener {
             val ip = binding.editTextIp.text.toString().trim()
             if (ip.isNotEmpty()) {
                 LedApiClient.setBaseUrl(ip)
+                android.util.Log.d("MainActivity", "Connect button pressed. IP: $ip, Current URL: ${LedApiClient.getCurrentBaseUrl()}")
+                
                 Toast.makeText(this, "Connecting to $ip...", Toast.LENGTH_SHORT).show()
+                
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        val response = LedApiClient.getApiService().getStatus()
+                        withContext(Dispatchers.Main) {
+                            if (response.isSuccessful && response.body() != null) {
+                                currentState = response.body()!!
+                                updateUi(currentState)
+                                Toast.makeText(this@MainActivity, "✓ Connected to $ip", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(this@MainActivity, "✗ Connection failed (${response.code()})", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("MainActivity", "Connection test failed: ${e.message}", e)
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(this@MainActivity, "✗ Cannot connect to $ip\n${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            } else {
+                Toast.makeText(this, "Please enter IP address", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -103,6 +143,7 @@ class MainActivity : AppCompatActivity() {
 
         colorButtons.forEach { (button, rgb) ->
             button.setOnClickListener {
+                lastUserActionTime = System.currentTimeMillis()
                 sendColor(rgb.first, rgb.second, rgb.third)
                 sendMode(0)
                 
@@ -114,6 +155,7 @@ class MainActivity : AppCompatActivity() {
                 )
                 updateUi(currentState)
                 
+                android.util.Log.d("MainActivity", "User selected color: RGB(${rgb.first}, ${rgb.second}, ${rgb.third})")
                 Toast.makeText(this@MainActivity, "Color: RGB(${rgb.first}, ${rgb.second}, ${rgb.third})", Toast.LENGTH_SHORT).show()
             }
         }
@@ -135,20 +177,34 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun sendColor(r: Int, g: Int, b: Int) {
+        val currentUrl = LedApiClient.getCurrentBaseUrl()
+        android.util.Log.d("MainActivity", "Sending color to $currentUrl: RGB($r, $g, $b)")
+        
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val response = LedApiClient.getApiService().setColor(
                     com.example.ledcontroller.model.ColorRequest(r, g, b)
                 )
-                if (!response.isSuccessful) {
+                
+                android.util.Log.d("MainActivity", "Color response code: ${response.code()}, body: ${response.body()}")
+                
+                if (response.isSuccessful && response.body() != null) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(this@MainActivity, "Failed to set color", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, 
+                            "✓ LED color updated", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    android.util.Log.e("MainActivity", "Failed to set color. Code: ${response.code()}")
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, 
+                            "✗ Failed to set color (${response.code()})", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("MainActivity", "Error sending color: ${e.message}", e)
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, 
+                        "✗ Error: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -199,13 +255,22 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val response = LedApiClient.getApiService().getStatus()
                     if (response.isSuccessful && response.body() != null) {
-                        currentState = response.body()!!
-                        withContext(Dispatchers.Main) {
-                            updateUi(currentState)
+                        val newState = response.body()!!
+                        
+                        val timeSinceLastAction = System.currentTimeMillis() - lastUserActionTime
+                        
+                        if (timeSinceLastAction > 3000) {  // 3秒后才允许轮询覆盖
+                            currentState = newState
+                            withContext(Dispatchers.Main) {
+                                updateUi(currentState)
+                            }
+                            android.util.Log.d("MainActivity", "Polling updated UI: ${newState}")
+                        } else {
+                            android.util.Log.d("MainActivity", "Polling skipped (user action ${timeSinceLastAction}ms ago)")
                         }
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    android.util.Log.e("MainActivity", "Polling error: ${e.message}", e)
                 }
                 delay(2000)
             }

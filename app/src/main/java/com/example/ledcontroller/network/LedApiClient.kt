@@ -7,12 +7,12 @@ import java.util.concurrent.TimeUnit
 
 object LedApiClient {
 
-    private var baseUrl: String = "http://192.168.1.100"
+    private var baseUrl: String = "http://10.127.64.170"
     
     private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
-        .writeTimeout(5, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .writeTimeout(10, TimeUnit.SECONDS)
         .build()
 
     private var apiService: ApiService? = null
@@ -24,6 +24,7 @@ object LedApiClient {
             baseUrl = url
         }
         apiService = null
+        android.util.Log.d("LedApiClient", "Base URL updated to: $baseUrl")
     }
 
     fun getApiService(): ApiService {
