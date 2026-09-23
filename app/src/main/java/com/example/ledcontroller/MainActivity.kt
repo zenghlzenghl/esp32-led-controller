@@ -1,5 +1,6 @@
 package com.example.ledcontroller
 
+import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.widget.AdapterView
@@ -153,47 +154,194 @@ class MainActivity : AppCompatActivity() {
                 )
                 updateUi(currentState)
                 
+                android.util.Log.d("MainActivity", "====== COLOR BUTTON PRESSED ======")
                 android.util.Log.d("MainActivity", "User selected color: RGB(${rgb.first}, ${rgb.second}, ${rgb.third})")
                 Toast.makeText(this@MainActivity, "Color: RGB(${rgb.first}, ${rgb.second}, ${rgb.third})", Toast.LENGTH_SHORT).show()
                 
                 lifecycleScope.launch(Dispatchers.IO) {
                     try {
                         val currentUrl = LedApiClient.getCurrentBaseUrl()
-                        android.util.Log.d("MainActivity", "Sending to $currentUrl: setColor then setMode")
+                        val colorRequest = com.example.ledcontroller.model.ColorRequest(rgb.first, rgb.second, rgb.third)
+                        
+                        android.util.Log.d("MainActivity", "Target URL: $currentUrl")
+                        android.util.Log.d("MainActivity", "Request body: $colorRequest")
                         
                         val apiService = LedApiClient.getApiService()
                         
-                        val colorResponse = apiService.setColor(
-                            com.example.ledcontroller.model.ColorRequest(rgb.first, rgb.second, rgb.third)
-                        )
+                        android.util.Log.d("MainActivity", "--- Sending POST /api/color ---")
+                        val colorResponse = apiService.setColor(colorRequest)
                         
-                        android.util.Log.d("MainActivity", "Color response: ${colorResponse.code()}")
+                        android.util.Log.d("MainActivity", "Response code: ${colorResponse.code()}")
+                        android.util.Log.d("MainActivity", "Response successful: ${colorResponse.isSuccessful}")
+                        android.util.Log.d("MainActivity", "Response body: ${colorResponse.body()}")
+                        android.util.Log.d("MainActivity", "Error body: ${colorResponse.errorBody()?.string()}")
                         
-                        if (colorResponse.isSuccessful) {
-                            kotlinx.coroutines.delay(100)  // 等待ESP32处理完颜色设置
+                        if (colorResponse.isSuccessful && colorResponse.body() != null) {
+                            val response = colorResponse.body()!!
+                            android.util.Log.d("MainActivity", "Parsed response: $response")
                             
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(this@MainActivity, 
+                                    "✓ ESP32: ${response.status}, LED state: ${response.stateEnabled ?: "unknown"}", 
+                                    Toast.LENGTH_LONG).show()
+                            }
+                            
+                            kotlinx.coroutines.delay(150)  // 等待ESP32处理完颜色设置
+                            
+                            android.util.Log.d("MainActivity", "--- Sending POST /api/mode ---")
                             val modeResponse = apiService.setMode(ModeRequest(0))
-                            android.util.Log.d("MainActivity", "Mode response: ${modeResponse.code()}")
+                            android.util.Log.d("MainActivity", "Mode response code: ${modeResponse.code()}")
+                            android.util.Log.d("MainActivity", "Mode response body: ${modeResponse.body()}")
                             
                             if (modeResponse.isSuccessful) {
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(this@MainActivity, "✓ LED updated", Toast.LENGTH_SHORT).show()
-                                }
+                                android.util.Log.d("MainActivity", "====== SUCCESS: Color and Mode set ======")
                             } else {
-                                android.util.Log.e("MainActivity", "Mode failed: ${modeResponse.code()}")
+                                android.util.Log.e("MainActivity", "Mode request failed: ${modeResponse.code()}")
                             }
                         } else {
-                            android.util.Log.e("MainActivity", "Color failed: ${colorResponse.code()}")
+                            android.util.Log.e("MainActivity", "====== FAILED: Color request failed ======")
+                            android.util.Log.e("MainActivity", "Failed with code: ${colorResponse.code()}")
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(this@MainActivity, "✗ Failed (${colorResponse.code()})", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this@MainActivity, 
+                                    "✗ Failed (${colorResponse.code()}): ${colorResponse.message()}", 
+                                    Toast.LENGTH_LONG).show()
                             }
                         }
                     } catch (e: Exception) {
-                        android.util.Log.e("MainActivity", "Error: ${e.message}", e)
+                        android.util.Log.e("MainActivity", "====== ERROR: Exception occurred ======", e)
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(this@MainActivity, "✗ Error: ${e.message}", Toast.LENGTH_LONG).show()
+                            Toast.makeText(this@MainActivity, 
+                                "✗ Error: ${e.javaClass.simpleName}: ${e.message}", 
+                                Toast.LENGTH_LONG).show()
                         }
                     }
+                }
+            }
+        }
+        
+        binding.buttonPickColor.setOnClickListener {
+            showCustomColorPicker()
+        }
+    }
+
+    private fun showCustomColorPicker() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_color_picker, null)
+        val seekBarR = dialogView.findViewById<android.widget.SeekBar>(R.id.seekBarR)
+        val seekBarG = dialogView.findViewById<android.widget.SeekBar>(R.id.seekBarG)
+        val seekBarB = dialogView.findViewById<android.widget.SeekBar>(R.id.seekBarB)
+        val viewPreview = dialogView.findViewById<View>(R.id.viewColorPreviewDialog)
+        val textRgb = dialogView.findViewById<android.widget.TextView>(R.id.textRgbValue)
+        
+        seekBarR.progress = currentState.red
+        seekBarG.progress = currentState.green
+        seekBarB.progress = currentState.blue
+        
+        fun updatePreview() {
+            val r = seekBarR.progress
+            val g = seekBarG.progress
+            val b = seekBarB.progress
+            val color = Color.rgb(r, g, b)
+            viewPreview.setBackgroundColor(color)
+            textRgb.text = "RGB($r, $g, $b)"
+        }
+        
+        updatePreview()
+        
+        seekBarR.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                updatePreview()
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        })
+        
+        seekBarG.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                updatePreview()
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        })
+        
+        seekBarB.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                updatePreview()
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        })
+        
+        androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+            .setTitle("🎨 Custom Color Picker")
+            .setView(dialogView)
+            .setPositiveButton("Apply") { _, _ ->
+                val r = seekBarR.progress
+                val g = seekBarG.progress
+                val b = seekBarB.progress
+                
+                binding.viewColorPreview.setBackgroundColor(Color.rgb(r, g, b))
+                
+                lastUserActionTime = System.currentTimeMillis()
+                
+                currentState = currentState.copy(
+                    red = r,
+                    green = g,
+                    blue = b,
+                    mode = 0
+                )
+                updateUi(currentState)
+                
+                android.util.Log.d("MainActivity", "====== CUSTOM COLOR SELECTED ======")
+                android.util.Log.d("MainActivity", "User picked custom color: RGB($r, $g, $b)")
+                Toast.makeText(this@MainActivity, "Custom Color: RGB($r, $g, $b)", Toast.LENGTH_SHORT).show()
+                
+                sendCustomColor(r, g, b)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun sendCustomColor(r: Int, g: Int, b: Int) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val currentUrl = LedApiClient.getCurrentBaseUrl()
+                val colorRequest = com.example.ledcontroller.model.ColorRequest(r, g, b)
+                
+                android.util.Log.d("MainActivity", "Sending custom color to $currentUrl: $colorRequest")
+                
+                val apiService = LedApiClient.getApiService()
+                
+                android.util.Log.d("MainActivity", "--- Sending POST /api/color (custom) ---")
+                val colorResponse = apiService.setColor(colorRequest)
+                
+                android.util.Log.d("MainActivity", "Custom color response code: ${colorResponse.code()}")
+                android.util.Log.d("MainActivity", "Custom color response body: ${colorResponse.body()}")
+                
+                if (colorResponse.isSuccessful && colorResponse.body() != null) {
+                    kotlinx.coroutines.delay(150)
+                    
+                    val modeResponse = apiService.setMode(ModeRequest(0))
+                    android.util.Log.d("MainActivity", "Custom mode response: ${modeResponse.code()}")
+                    
+                    if (modeResponse.isSuccessful) {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(this@MainActivity, "✓ Custom color applied", Toast.LENGTH_SHORT).show()
+                        }
+                        android.util.Log.d("MainActivity", "====== CUSTOM COLOR SUCCESS ======")
+                    } else {
+                        android.util.Log.e("MainActivity", "Custom mode failed: ${modeResponse.code()}")
+                    }
+                } else {
+                    android.util.Log.e("MainActivity", "Custom color failed: ${colorResponse.code()}")
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, 
+                            "✗ Failed (${colorResponse.code()})", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Custom color error: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "✗ Error: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }

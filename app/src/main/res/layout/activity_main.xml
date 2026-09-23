@@ -364,6 +364,38 @@
                         android:backgroundTint="@color/white" />
                 </GridLayout>
 
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Custom Color:"
+                    android:textSize="13sp"
+                    android:textColor="@color/text_primary"
+                    android:layout_marginTop="12dp" />
+
+                <RelativeLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp">
+
+                    <View
+                        android:id="@+id/viewColorPreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="40dp"
+                        android:background="#FF00FF"
+                        android:layout_centerVertical="true"
+                        android:layout_toStartOf="@+id/buttonPickColor" />
+
+                    <Button
+                        android:id="@+id/buttonPickColor"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:layout_alignParentEnd="true"
+                        android:text="🎨 Pick"
+                        android:textSize="12sp"
+                        android:backgroundTint="@color/purple"
+                        android:layout_marginStart="8dp" />
+                </RelativeLayout>
+
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
