@@ -43,30 +43,27 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupUi() {
         binding.editTextIp.setText(DEFAULT_IP)
-        
-        LedApiClient.setBaseUrl(DEFAULT_IP)  // ✅ 启动时立即设置IP为输入框中的值
-        android.util.Log.d("MainActivity", "App started with IP: $DEFAULT_IP")
-        
+
+        LedApiClient.setBaseUrl(DEFAULT_IP)
+
         binding.editTextIp.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: android.text.Editable?) {
                 val ip = s?.toString()?.trim()
                 if (!ip.isNullOrEmpty()) {
-                    LedApiClient.setBaseUrl(ip)  // ✅ 用户修改IP时立即更新
-                    android.util.Log.d("MainActivity", "IP changed to: $ip")
+                    LedApiClient.setBaseUrl(ip)
                 }
             }
         })
-        
+
         binding.buttonConnect.setOnClickListener {
             val ip = binding.editTextIp.text.toString().trim()
             if (ip.isNotEmpty()) {
                 LedApiClient.setBaseUrl(ip)
-                android.util.Log.d("MainActivity", "Connect button pressed. IP: $ip, Current URL: ${LedApiClient.getCurrentBaseUrl()}")
-                
+
                 Toast.makeText(this, "Connecting to $ip...", Toast.LENGTH_SHORT).show()
-                
+
                 lifecycleScope.launch(Dispatchers.IO) {
                     try {
                         val response = LedApiClient.getApiService().getStatus()
@@ -80,7 +77,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     } catch (e: Exception) {
-                        android.util.Log.e("MainActivity", "Connection test failed: ${e.message}", e)
+                        android.util.Log.e("MainActivity", "Connection failed: ${e.message}")
                         withContext(Dispatchers.Main) {
                             Toast.makeText(this@MainActivity, "✗ Cannot connect to $ip\n${e.message}", Toast.LENGTH_LONG).show()
                         }
@@ -145,7 +142,7 @@ class MainActivity : AppCompatActivity() {
         colorButtons.forEach { (button, rgb) ->
             button.setOnClickListener {
                 lastUserActionTime = System.currentTimeMillis()
-                
+
                 currentState = currentState.copy(
                     red = rgb.first,
                     green = rgb.second,
@@ -153,71 +150,38 @@ class MainActivity : AppCompatActivity() {
                     mode = 0
                 )
                 updateUi(currentState)
-                
-                android.util.Log.d("MainActivity", "====== COLOR BUTTON PRESSED ======")
-                android.util.Log.d("MainActivity", "User selected color: RGB(${rgb.first}, ${rgb.second}, ${rgb.third})")
+
                 Toast.makeText(this@MainActivity, "Color: RGB(${rgb.first}, ${rgb.second}, ${rgb.third})", Toast.LENGTH_SHORT).show()
-                
+
                 lifecycleScope.launch(Dispatchers.IO) {
                     try {
-                        val currentUrl = LedApiClient.getCurrentBaseUrl()
                         val colorRequest = com.example.ledcontroller.model.ColorRequest(rgb.first, rgb.second, rgb.third)
-                        val colorJsonString = colorRequest.toJsonString()  // 手动构建紧凑JSON（无空格）
-                        
-                        android.util.Log.d("MainActivity", "Target URL: $currentUrl")
-                        android.util.Log.d("MainActivity", "Request body (raw): $colorJsonString")
-                        
+                        val colorJsonString = colorRequest.toJsonString()
+
                         val apiService = LedApiClient.getApiService()
-                        
                         val mediaType = okhttp3.MediaType.parse("application/json; charset=utf-8")!!
                         val requestBody = okhttp3.RequestBody.create(mediaType, colorJsonString)
-                        
-                        android.util.Log.d("MainActivity", "--- Sending POST /api/color ---")
-                        android.util.Log.d("MainActivity", "Actual JSON being sent: $colorJsonString")
+
                         val colorResponse = apiService.setColor(requestBody)
-                        
-                        android.util.Log.d("MainActivity", "Response code: ${colorResponse.code()}")
-                        android.util.Log.d("MainActivity", "Response successful: ${colorResponse.isSuccessful}")
-                        android.util.Log.d("MainActivity", "Response body: ${colorResponse.body()}")
-                        android.util.Log.d("MainActivity", "Error body: ${colorResponse.errorBody()?.string()}")
-                        
-                        if (colorResponse.isSuccessful && colorResponse.body() != null) {
-                            val response = colorResponse.body()!!
-                            android.util.Log.d("MainActivity", "Parsed response: $response")
-                            
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(this@MainActivity, 
-                                    "✓ ESP32: ${response.status}, LED state: ${response.stateEnabled ?: "unknown"}", 
-                                    Toast.LENGTH_LONG).show()
-                            }
-                            
-                            kotlinx.coroutines.delay(150)  // 等待ESP32处理完颜色设置
-                            
-                            android.util.Log.d("MainActivity", "--- Sending POST /api/mode ---")
+
+                        if (colorResponse.isSuccessful) {
+                            kotlinx.coroutines.delay(150)
+
                             val modeResponse = apiService.setMode(ModeRequest(0))
-                            android.util.Log.d("MainActivity", "Mode response code: ${modeResponse.code()}")
-                            android.util.Log.d("MainActivity", "Mode response body: ${modeResponse.body()}")
-                            
-                            if (modeResponse.isSuccessful) {
-                                android.util.Log.d("MainActivity", "====== SUCCESS: Color and Mode set ======")
-                            } else {
-                                android.util.Log.e("MainActivity", "Mode request failed: ${modeResponse.code()}")
+
+                            if (!modeResponse.isSuccessful) {
+                                android.util.Log.e("MainActivity", "Failed to set mode: ${modeResponse.code()}")
                             }
                         } else {
-                            android.util.Log.e("MainActivity", "====== FAILED: Color request failed ======")
-                            android.util.Log.e("MainActivity", "Failed with code: ${colorResponse.code()}")
+                            android.util.Log.e("MainActivity", "Failed to set color: ${colorResponse.code()}")
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(this@MainActivity, 
-                                    "✗ Failed (${colorResponse.code()}): ${colorResponse.message()}", 
-                                    Toast.LENGTH_LONG).show()
+                                Toast.makeText(this@MainActivity, "✗ Failed to set color", Toast.LENGTH_SHORT).show()
                             }
                         }
                     } catch (e: Exception) {
-                        android.util.Log.e("MainActivity", "====== ERROR: Exception occurred ======", e)
+                        android.util.Log.e("MainActivity", "Error setting color: ${e.message}")
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(this@MainActivity, 
-                                "✗ Error: ${e.javaClass.simpleName}: ${e.message}", 
-                                Toast.LENGTH_LONG).show()
+                            Toast.makeText(this@MainActivity, "✗ Error: ${e.message}", Toast.LENGTH_LONG).show()
                         }
                     }
                 }
@@ -283,11 +247,11 @@ class MainActivity : AppCompatActivity() {
                 val r = seekBarR.progress
                 val g = seekBarG.progress
                 val b = seekBarB.progress
-                
+
                 binding.viewColorPreview.setBackgroundColor(Color.rgb(r, g, b))
-                
+
                 lastUserActionTime = System.currentTimeMillis()
-                
+
                 currentState = currentState.copy(
                     red = r,
                     green = g,
@@ -295,11 +259,9 @@ class MainActivity : AppCompatActivity() {
                     mode = 0
                 )
                 updateUi(currentState)
-                
-                android.util.Log.d("MainActivity", "====== CUSTOM COLOR SELECTED ======")
-                android.util.Log.d("MainActivity", "User picked custom color: RGB($r, $g, $b)")
+
                 Toast.makeText(this@MainActivity, "Custom Color: RGB($r, $g, $b)", Toast.LENGTH_SHORT).show()
-                
+
                 sendCustomColor(r, g, b)
             }
             .setNegativeButton("Cancel", null)
@@ -309,48 +271,35 @@ class MainActivity : AppCompatActivity() {
     private fun sendCustomColor(r: Int, g: Int, b: Int) {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val currentUrl = LedApiClient.getCurrentBaseUrl()
                 val colorRequest = com.example.ledcontroller.model.ColorRequest(r, g, b)
-                val colorJsonString = colorRequest.toJsonString()  // 手动构建紧凑JSON（无空格）
-                
-                android.util.Log.d("MainActivity", "Sending custom color to $currentUrl")
-                android.util.Log.d("MainActivity", "Custom JSON: $colorJsonString")
-                
+                val colorJsonString = colorRequest.toJsonString()
+
                 val apiService = LedApiClient.getApiService()
-                
                 val mediaType = okhttp3.MediaType.parse("application/json; charset=utf-8")!!
                 val requestBody = okhttp3.RequestBody.create(mediaType, colorJsonString)
-                
-                android.util.Log.d("MainActivity", "--- Sending POST /api/color (custom) ---")
-                android.util.Log.d("MainActivity", "Actual JSON being sent: $colorJsonString")
+
                 val colorResponse = apiService.setColor(requestBody)
-                
-                android.util.Log.d("MainActivity", "Custom color response code: ${colorResponse.code()}")
-                android.util.Log.d("MainActivity", "Custom color response body: ${colorResponse.body()}")
-                
-                if (colorResponse.isSuccessful && colorResponse.body() != null) {
+
+                if (colorResponse.isSuccessful) {
                     kotlinx.coroutines.delay(150)
-                    
+
                     val modeResponse = apiService.setMode(ModeRequest(0))
-                    android.util.Log.d("MainActivity", "Custom mode response: ${modeResponse.code()}")
-                    
+
                     if (modeResponse.isSuccessful) {
                         withContext(Dispatchers.Main) {
                             Toast.makeText(this@MainActivity, "✓ Custom color applied", Toast.LENGTH_SHORT).show()
                         }
-                        android.util.Log.d("MainActivity", "====== CUSTOM COLOR SUCCESS ======")
                     } else {
-                        android.util.Log.e("MainActivity", "Custom mode failed: ${modeResponse.code()}")
+                        android.util.Log.e("MainActivity", "Failed to set mode for custom color")
                     }
                 } else {
-                    android.util.Log.e("MainActivity", "Custom color failed: ${colorResponse.code()}")
+                    android.util.Log.e("MainActivity", "Failed to set custom color: ${colorResponse.code()}")
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(this@MainActivity, 
-                            "✗ Failed (${colorResponse.code()})", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, "✗ Failed", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
-                android.util.Log.e("MainActivity", "Custom color error: ${e.message}", e)
+                android.util.Log.e("MainActivity", "Error setting custom color: ${e.message}")
                 withContext(Dispatchers.Main) {
                     Toast.makeText(this@MainActivity, "✗ Error: ${e.message}", Toast.LENGTH_LONG).show()
                 }
@@ -374,38 +323,32 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun sendColor(r: Int, g: Int, b: Int) {
-        val currentUrl = LedApiClient.getCurrentBaseUrl()
         val colorRequest = com.example.ledcontroller.model.ColorRequest(r, g, b)
-        val colorJsonString = colorRequest.toJsonString()  // 紧凑JSON（无空格）
-        
-        android.util.Log.d("MainActivity", "Sending color to $currentUrl")
-        android.util.Log.d("MainActivity", "Color JSON: $colorJsonString")
-        
+        val colorJsonString = colorRequest.toJsonString()
+
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val mediaType = okhttp3.MediaType.parse("application/json; charset=utf-8")!!
                 val requestBody = okhttp3.RequestBody.create(mediaType, colorJsonString)
-                
+
                 val response = LedApiClient.getApiService().setColor(requestBody)
-                
-                android.util.Log.d("MainActivity", "Color response code: ${response.code()}, body: ${response.body()}")
-                
+
                 if (response.isSuccessful && response.body() != null) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(this@MainActivity, 
+                        Toast.makeText(this@MainActivity,
                             "✓ LED color updated", Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    android.util.Log.e("MainActivity", "Failed to set color. Code: ${response.code()}")
+                    android.util.Log.e("MainActivity", "Failed to set color: ${response.code()}")
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(this@MainActivity, 
+                        Toast.makeText(this@MainActivity,
                             "✗ Failed to set color (${response.code()})", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
-                android.util.Log.e("MainActivity", "Error sending color: ${e.message}", e)
+                android.util.Log.e("MainActivity", "Error sending color: ${e.message}")
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, 
+                    Toast.makeText(this@MainActivity,
                         "✗ Error: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
@@ -466,13 +409,10 @@ class MainActivity : AppCompatActivity() {
                             withContext(Dispatchers.Main) {
                                 updateUi(currentState)
                             }
-                            android.util.Log.d("MainActivity", "Polling updated UI: ${newState}")
-                        } else {
-                            android.util.Log.d("MainActivity", "Polling skipped (user action ${timeSinceLastAction}ms ago)")
                         }
                     }
                 } catch (e: Exception) {
-                    android.util.Log.e("MainActivity", "Polling error: ${e.message}", e)
+                    android.util.Log.e("MainActivity", "Polling error: ${e.message}")
                 }
                 delay(2000)
             }
