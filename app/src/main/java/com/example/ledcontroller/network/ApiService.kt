@@ -1,6 +1,7 @@
 package com.example.ledcontroller.network
 
 import com.example.ledcontroller.model.*
+import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -15,8 +16,8 @@ interface ApiService {
     @POST("/api/off")
     suspend fun turnOff(): Response<ApiResponse>
 
-    @POST("/api/color")
-    suspend fun setColor(@Body color: ColorRequest): Response<ApiResponse>
+    @POST("/api/color)
+    suspend fun setColor(@Body colorJson: RequestBody): Response<ApiResponse>  // 改为接收JSON字符串
 
     @POST("/api/brightness")
     suspend fun setBrightness(@Body brightness: BrightnessRequest): Response<ApiResponse>

@@ -162,14 +162,19 @@ class MainActivity : AppCompatActivity() {
                     try {
                         val currentUrl = LedApiClient.getCurrentBaseUrl()
                         val colorRequest = com.example.ledcontroller.model.ColorRequest(rgb.first, rgb.second, rgb.third)
+                        val colorJsonString = colorRequest.toJsonString()  // 手动构建紧凑JSON（无空格）
                         
                         android.util.Log.d("MainActivity", "Target URL: $currentUrl")
-                        android.util.Log.d("MainActivity", "Request body: $colorRequest")
+                        android.util.Log.d("MainActivity", "Request body (raw): $colorJsonString")
                         
                         val apiService = LedApiClient.getApiService()
                         
+                        val mediaType = okhttp3.MediaType.parse("application/json; charset=utf-8")!!
+                        val requestBody = okhttp3.RequestBody.create(mediaType, colorJsonString)
+                        
                         android.util.Log.d("MainActivity", "--- Sending POST /api/color ---")
-                        val colorResponse = apiService.setColor(colorRequest)
+                        android.util.Log.d("MainActivity", "Actual JSON being sent: $colorJsonString")
+                        val colorResponse = apiService.setColor(requestBody)
                         
                         android.util.Log.d("MainActivity", "Response code: ${colorResponse.code()}")
                         android.util.Log.d("MainActivity", "Response successful: ${colorResponse.isSuccessful}")
@@ -306,13 +311,19 @@ class MainActivity : AppCompatActivity() {
             try {
                 val currentUrl = LedApiClient.getCurrentBaseUrl()
                 val colorRequest = com.example.ledcontroller.model.ColorRequest(r, g, b)
+                val colorJsonString = colorRequest.toJsonString()  // 手动构建紧凑JSON（无空格）
                 
-                android.util.Log.d("MainActivity", "Sending custom color to $currentUrl: $colorRequest")
+                android.util.Log.d("MainActivity", "Sending custom color to $currentUrl")
+                android.util.Log.d("MainActivity", "Custom JSON: $colorJsonString")
                 
                 val apiService = LedApiClient.getApiService()
                 
+                val mediaType = okhttp3.MediaType.parse("application/json; charset=utf-8")!!
+                val requestBody = okhttp3.RequestBody.create(mediaType, colorJsonString)
+                
                 android.util.Log.d("MainActivity", "--- Sending POST /api/color (custom) ---")
-                val colorResponse = apiService.setColor(colorRequest)
+                android.util.Log.d("MainActivity", "Actual JSON being sent: $colorJsonString")
+                val colorResponse = apiService.setColor(requestBody)
                 
                 android.util.Log.d("MainActivity", "Custom color response code: ${colorResponse.code()}")
                 android.util.Log.d("MainActivity", "Custom color response body: ${colorResponse.body()}")

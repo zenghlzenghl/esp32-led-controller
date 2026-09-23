@@ -26,9 +26,18 @@ data class ApiResponse(
     }
 }
 
-data class ColorRequest(val r: Int, val g: Int, val b: Int) {
-    override fun toString(): String {
+data class ColorRequest(
+    @SerializedName("r") val r: Int,
+    @SerializedName("g") val g: Int,
+    @SerializedName("b") val b: Int
+) {
+    fun toJsonString(): String {
+        // 手动构建紧凑的JSON字符串（无空格），兼容ESP32的sscanf
         return "{\"r\":$r,\"g\":$g,\"b\":$b}"
+    }
+    
+    override fun toString(): String {
+        return toJsonString()
     }
 }
 data class BrightnessRequest(val brightness: Int)
