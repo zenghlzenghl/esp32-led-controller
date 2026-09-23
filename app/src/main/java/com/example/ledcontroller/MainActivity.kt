@@ -23,6 +23,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private var currentState: LedState = LedState()
     private var isPolling = false
+    private var isInitializing = true  // 标记是否正在初始化
 
     companion object {
         val MODE_NAMES = arrayOf("Static", "Breathing", "Blinking", "Rainbow", "Police")
@@ -50,6 +51,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.switchPower.setOnCheckedChangeListener { _, isChecked ->
+            if (isInitializing) return@setOnCheckedChangeListener  // 初始化期间不触发
+            
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
                     if (isChecked) {
@@ -59,6 +62,9 @@ class MainActivity : AppCompatActivity() {
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
         }
@@ -77,6 +83,8 @@ class MainActivity : AppCompatActivity() {
 
         setupColorButtons()
         setupModeSpinner()
+        
+        isInitializing = false  // UI 初始化完成，允许触发事件
     }
 
     private fun setupColorButtons() {
@@ -193,6 +201,40 @@ class MainActivity : AppCompatActivity() {
 
         val connectionInfo = "IP: ${LedApiClient.getCurrentBaseUrl().replace("http://", "")}"
         binding.textConnectionInfo.text = connectionInfo
+    }
+
+    fun onTurnOnClicked(view: View) {
+        binding.switchPower.isChecked = true
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                LedApiClient.getApiService().turnOn()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "LED Turned ON", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "Failed to turn ON: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    fun onTurnOffClicked(view: View) {
+        binding.switchPower.isChecked = false
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                LedApiClient.getApiService().turnOff()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "LED Turned OFF", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "Failed to turn OFF: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
 
     override fun onDestroy() {

@@ -145,7 +145,8 @@
                         android:layout_width="0dp"
                         android:layout_height="48dp"
                         android:layout_weight="1"
-                        android:text="✓ Turn ON"
+                        android:text="ON"
+                        android:textSize="14sp"
                         android:backgroundTint="@color/green"
                         android:layout_marginEnd="6dp"
                         android:onClick="onTurnOnClicked" />
@@ -155,7 +156,8 @@
                         android:layout_width="0dp"
                         android:layout_height="48dp"
                         android:layout_weight="1"
-                        android:text="✗ Turn OFF"
+                        android:text="OFF"
+                        android:textSize="14sp"
                         android:backgroundTint="@color/red"
                         android:layout_marginStart="6dp"
                         android:onClick="onTurnOffClicked" />
