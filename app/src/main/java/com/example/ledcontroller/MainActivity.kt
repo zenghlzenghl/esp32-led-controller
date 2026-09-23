@@ -375,13 +375,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun sendColor(r: Int, g: Int, b: Int) {
         val currentUrl = LedApiClient.getCurrentBaseUrl()
-        android.util.Log.d("MainActivity", "Sending color to $currentUrl: RGB($r, $g, $b)")
+        val colorRequest = com.example.ledcontroller.model.ColorRequest(r, g, b)
+        val colorJsonString = colorRequest.toJsonString()  // 紧凑JSON（无空格）
+        
+        android.util.Log.d("MainActivity", "Sending color to $currentUrl")
+        android.util.Log.d("MainActivity", "Color JSON: $colorJsonString")
         
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val response = LedApiClient.getApiService().setColor(
-                    com.example.ledcontroller.model.ColorRequest(r, g, b)
-                )
+                val mediaType = okhttp3.MediaType.parse("application/json; charset=utf-8")!!
+                val requestBody = okhttp3.RequestBody.create(mediaType, colorJsonString)
+                
+                val response = LedApiClient.getApiService().setColor(requestBody)
                 
                 android.util.Log.d("MainActivity", "Color response code: ${response.code()}, body: ${response.body()}")
                 

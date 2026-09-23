@@ -16,8 +16,8 @@ interface ApiService {
     @POST("/api/off")
     suspend fun turnOff(): Response<ApiResponse>
 
-    @POST("/api/color)
-    suspend fun setColor(@Body colorJson: RequestBody): Response<ApiResponse>  // 改为接收JSON字符串
+    @POST("/api/color")
+    suspend fun setColor(@Body colorJson: RequestBody): Response<ApiResponse>
 
     @POST("/api/brightness")
     suspend fun setBrightness(@Body brightness: BrightnessRequest): Response<ApiResponse>
