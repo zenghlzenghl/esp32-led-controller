@@ -144,8 +144,6 @@ class MainActivity : AppCompatActivity() {
         colorButtons.forEach { (button, rgb) ->
             button.setOnClickListener {
                 lastUserActionTime = System.currentTimeMillis()
-                sendColor(rgb.first, rgb.second, rgb.third)
-                sendMode(0)
                 
                 currentState = currentState.copy(
                     red = rgb.first,
@@ -157,6 +155,46 @@ class MainActivity : AppCompatActivity() {
                 
                 android.util.Log.d("MainActivity", "User selected color: RGB(${rgb.first}, ${rgb.second}, ${rgb.third})")
                 Toast.makeText(this@MainActivity, "Color: RGB(${rgb.first}, ${rgb.second}, ${rgb.third})", Toast.LENGTH_SHORT).show()
+                
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        val currentUrl = LedApiClient.getCurrentBaseUrl()
+                        android.util.Log.d("MainActivity", "Sending to $currentUrl: setColor then setMode")
+                        
+                        val apiService = LedApiClient.getApiService()
+                        
+                        val colorResponse = apiService.setColor(
+                            com.example.ledcontroller.model.ColorRequest(rgb.first, rgb.second, rgb.third)
+                        )
+                        
+                        android.util.Log.d("MainActivity", "Color response: ${colorResponse.code()}")
+                        
+                        if (colorResponse.isSuccessful) {
+                            kotlinx.coroutines.delay(100)  // 等待ESP32处理完颜色设置
+                            
+                            val modeResponse = apiService.setMode(ModeRequest(0))
+                            android.util.Log.d("MainActivity", "Mode response: ${modeResponse.code()}")
+                            
+                            if (modeResponse.isSuccessful) {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(this@MainActivity, "✓ LED updated", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                android.util.Log.e("MainActivity", "Mode failed: ${modeResponse.code()}")
+                            }
+                        } else {
+                            android.util.Log.e("MainActivity", "Color failed: ${colorResponse.code()}")
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(this@MainActivity, "✗ Failed (${colorResponse.code()})", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("MainActivity", "Error: ${e.message}", e)
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(this@MainActivity, "✗ Error: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
             }
         }
     }
