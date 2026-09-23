@@ -105,6 +105,16 @@ class MainActivity : AppCompatActivity() {
             button.setOnClickListener {
                 sendColor(rgb.first, rgb.second, rgb.third)
                 sendMode(0)
+                
+                currentState = currentState.copy(
+                    red = rgb.first,
+                    green = rgb.second,
+                    blue = rgb.third,
+                    mode = 0
+                )
+                updateUi(currentState)
+                
+                Toast.makeText(this@MainActivity, "Color: RGB(${rgb.first}, ${rgb.second}, ${rgb.third})", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -127,11 +137,19 @@ class MainActivity : AppCompatActivity() {
     private fun sendColor(r: Int, g: Int, b: Int) {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                LedApiClient.getApiService().setColor(
+                val response = LedApiClient.getApiService().setColor(
                     com.example.ledcontroller.model.ColorRequest(r, g, b)
                 )
+                if (!response.isSuccessful) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, "Failed to set color", Toast.LENGTH_SHORT).show()
+                    }
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
@@ -139,11 +157,19 @@ class MainActivity : AppCompatActivity() {
     private fun sendBrightness(value: Int) {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                LedApiClient.getApiService().setBrightness(
+                val response = LedApiClient.getApiService().setBrightness(
                     com.example.ledcontroller.model.BrightnessRequest(value)
                 )
+                if (!response.isSuccessful) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, "Failed to set brightness", Toast.LENGTH_SHORT).show()
+                    }
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
@@ -151,9 +177,17 @@ class MainActivity : AppCompatActivity() {
     private fun sendMode(mode: Int) {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                LedApiClient.getApiService().setMode(ModeRequest(mode))
+                val response = LedApiClient.getApiService().setMode(ModeRequest(mode))
+                if (!response.isSuccessful) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, "Failed to set mode", Toast.LENGTH_SHORT).show()
+                    }
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
